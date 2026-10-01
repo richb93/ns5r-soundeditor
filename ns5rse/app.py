@@ -128,7 +128,8 @@ class App:
             mb.add_cascade(menu=apple)
             root.createcommand('tk::mac::Quit', self.quit)
             root.createcommand('::tk::mac::OpenDocument', self.open_documents)
-            root.createcommand('::tk::mac::ShowPreferences', self.preferences)
+            # the standard Settings... (Cmd+,) item of the app menu: GUI scale
+            root.createcommand('::tk::mac::ShowPreferences', self.settings_dialog)
         f = tk.Menu(mb, tearoff=0)
         add(f, 'New', self.new, 'N')
         add(f, 'Open...', self.open, 'O')
@@ -179,21 +180,7 @@ class App:
         o.add_separator()
         add(o, 'Remark List...', lambda: (DL.RemarkDialog(self).show(), self.refresh_all()))
         o.add_separator()
-        if sys.platform != 'darwin':
-            add(o, 'Preferences...', self.preferences)
-            sc = tk.Menu(o, tearoff=0)
-            self.scale_var = tk.IntVar(value=self.scale_choice or 0)
-            for value, label in SCALE_CHOICES:
-                sc.add_radiobutton(label=label, value=value, variable=self.scale_var,
-                                   command=lambda: self.set_scale(self.scale_var.get() or None))
-            o.add_cascade(label='Scale', menu=sc)
-        else:
-            sc = tk.Menu(o, tearoff=0)
-            self.scale_var = tk.IntVar(value=self.scale_choice or 0)
-            for value, label in SCALE_CHOICES:
-                sc.add_radiobutton(label=label, value=value, variable=self.scale_var,
-                                   command=lambda: self.set_scale(self.scale_var.get() or None))
-            o.add_cascade(label='Scale', menu=sc)
+        add(o, 'Preferences...', self.preferences)
         mb.add_cascade(label='Options', menu=o)
         w = tk.Menu(mb, tearoff=0)
         add(w, 'Keyboard', self.show_keyboard, 'K')
@@ -208,6 +195,15 @@ class App:
                                  command=lambda mm=mm, d=d: self.edit_multi_kit(mm, d))
         w.add_cascade(label='Drum Kit Edit', menu=kits)
         mb.add_cascade(label='Window', menu=w)
+        self.scale_var = tk.IntVar(value=self.scale_choice or 0)
+        if sys.platform != 'darwin':           # macOS: app menu > Settings... instead
+            st = tk.Menu(mb, tearoff=0)
+            sc = tk.Menu(st, tearoff=0)
+            for value, label in SCALE_CHOICES:
+                sc.add_radiobutton(label=label, value=value, variable=self.scale_var,
+                                   command=lambda: self.set_scale(self.scale_var.get() or None))
+            st.add_cascade(label='Scale', menu=sc)
+            mb.add_cascade(label='Settings', menu=st)
         h = tk.Menu(mb, tearoff=0, name='help' if sys.platform == 'darwin' else None)
         add(h, 'About...', self.about)
         mb.add_cascade(label='Help', menu=h)
@@ -969,6 +965,9 @@ class App:
         return msgs
 
     # ------------------------------------------------------------ misc
+    def settings_dialog(self):
+        DL.SettingsDialog(self)
+
     def preferences(self):
         DL.PreferencesDialog(self).show()
 

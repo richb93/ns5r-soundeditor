@@ -71,8 +71,11 @@ def reset_caches():
 
 
 def setup_style(root):
-    root.option_add('*Font', font())
-    root.option_add('*Background', FACE)
+    # only the editor's own widgets get the dialog font and face colour; menus stay OS native
+    for cls in ('Label', 'Entry', 'Button', 'Checkbutton', 'Radiobutton', 'Listbox', 'Text', 'Scale'):
+        root.option_add(f'*{cls}.font', font())
+    for cls in ('Frame', 'Label', 'Canvas', 'Toplevel', 'Checkbutton', 'Radiobutton', 'Scale'):
+        root.option_add(f'*{cls}.background', FACE)
     root.configure(bg=FACE)
     st = ttk.Style(root)
     st.theme_use('alt')
@@ -82,8 +85,9 @@ def setup_style(root):
                  bordercolor=SHADOW, lightcolor=LIGHT, darkcolor=SHADOW)
     st.configure('TButton', padding=(Scale.px(2), 0), anchor='center', borderwidth=Scale.px(2))
     st.map('TButton', foreground=[('disabled', GREYTEXT)])
-    st.configure('TCheckbutton', padding=0, indicatormargin=(0, 0, Scale.px(3), 0))
-    st.configure('TRadiobutton', padding=0, indicatormargin=(0, 0, Scale.px(3), 0))
+    st.configure('TCheckbutton', padding=0)
+    st.configure('TRadiobutton', padding=0)
+    install_indicators(root, st)
     for cls in ('TCheckbutton', 'TRadiobutton'):
         st.map(cls, foreground=[('disabled', GREYTEXT)], indicatorcolor=[('disabled', FACE)],
                background=[('disabled', FACE), ('active', FACE)])
@@ -99,6 +103,82 @@ def setup_style(root):
     st.configure('TScrollbar', arrowsize=Scale.px(14))
     root.option_add('*TCombobox*Listbox.font', f)
     root.option_add('*TCombobox*Listbox.selectBackground', SEL_BG)
+
+
+def _indicator_images(kind):
+    """Win9x check box / radio button images at the current scale: {state: PhotoImage}."""
+    s = Scale.s
+    n = 13 * s
+    out = {}
+    for state in ('off', 'on', 'dis_off', 'dis_on'):
+        img = tk.PhotoImage(width=n + 3 * s, height=n)
+        dis = state.startswith('dis')
+        on = state.endswith('on') and not state.endswith('off')
+        fill = FACE if dis else WINDOW
+        mark = GREYTEXT if dis else TEXT
+        rows = []
+        for y in range(n):
+            row = []
+            for x in range(n + 3 * s):
+                c = None
+                if x < n:
+                    if kind == 'check':
+                        px, py = x // s, y // s
+                        if px == 0 or py == 0:
+                            c = SHADOW if px < 12 and py < 12 else LIGHT
+                        elif px == 12 or py == 12:
+                            c = LIGHT
+                        elif px == 1 or py == 1:
+                            c = DARK if px < 11 and py < 11 else FACE
+                        elif px == 11 or py == 11:
+                            c = FACE
+                        else:
+                            c = fill
+                            if on and (px, py) in CHECK_PIXELS:
+                                c = mark
+                    else:
+                        cx = cy = (n - 1) / 2
+                        dx, dy = x - cx, y - cy
+                        r = (dx * dx + dy * dy) ** 0.5 / s
+                        if r <= 6.5:
+                            if r > 5.5:
+                                c = SHADOW if dx + dy < 0 else LIGHT
+                            elif r > 4.5:
+                                c = DARK if dx + dy < 0 else FACE
+                            else:
+                                c = mark if on and r <= 2.0 else fill
+                row.append(c or FACE)
+            rows.append('{' + ' '.join(row) + '}')
+        img.put(' '.join(rows))
+        out[state] = img
+    return out
+
+
+_indicators = {}
+
+# the check mark of a 13x13 Windows check box (pixel coordinates)
+CHECK_PIXELS = {(x, y) for x, ys in ((3, (5, 6, 7)), (4, (6, 7, 8)), (5, (7, 8, 9)), (6, (6, 7, 8)),
+                                      (7, (5, 6, 7)), (8, (4, 5, 6)), (9, (3, 4, 5))) for y in ys}
+
+
+def install_indicators(root, st):
+    """Replace the ttk indicators (fixed-size on recent Tk) with scaled Win9x ones."""
+    for kind, cls in (('check', 'Checkbutton'), ('radio', 'Radiobutton')):
+        key = (kind, Scale.s, str(root))
+        if key not in _indicators:                      # kept for the life of the Tk interpreter
+            _indicators[key] = _indicator_images(kind)
+        imgs = _indicators[key]
+        name = f'Win{Scale.s}.{cls}.indicator'
+        try:
+            st.element_create(name, 'image', imgs['off'],
+                              ('disabled', 'selected', imgs['dis_on']), ('disabled', imgs['dis_off']),
+                              ('selected', imgs['on']), sticky='w')
+        except tk.TclError:
+            pass                                        # already created for this scale
+        st.layout(f'T{cls}', [(f'{cls}.padding', {'sticky': 'nswe', 'children': [
+            (name, {'side': 'left', 'sticky': ''}),
+            (f'{cls}.focus', {'side': 'left', 'sticky': 'w', 'children': [
+                (f'{cls}.label', {'sticky': 'nswe'})]})]})])
 
 
 def place(w, rect):

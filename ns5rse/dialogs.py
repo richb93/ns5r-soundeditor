@@ -675,3 +675,33 @@ class ExportDialog(ModalDialog):
         items = list(range(n)) if f.check(105) else [f.w[104].current()]
         self.result = (kind, items, EXPORT_FORMATS[f.w[106].current()])
         self.close()
+
+
+# =================================================================== settings (GUI scale)
+class SettingsDialog:
+    """Settings (macOS app menu > Settings..., Cmd+,): the window scale."""
+
+    def __init__(self, app):
+        from .app import SCALE_CHOICES
+        self.app = app
+        top = self.top = tk.Toplevel(app.root, bg=ui.FACE, padx=Scale.px(14), pady=Scale.px(10))
+        top.title('Settings')
+        top.resizable(False, False)
+        top.transient(app.root)
+        ttk.Label(top, text='Window scale:').grid(row=0, column=0, columnspan=2, sticky='w')
+        self.var = tk.IntVar(value=app.scale_choice or 0)
+        for i, (value, label) in enumerate(SCALE_CHOICES):
+            if value == 0:
+                label = f'{label} ({app.auto_scale()}x)'
+            ttk.Radiobutton(top, text=label, value=value, variable=self.var).grid(
+                row=1 + i, column=0, columnspan=2, sticky='w', padx=(Scale.px(10), 0), pady=Scale.px(1))
+        ttk.Button(top, text='Cancel', command=top.destroy).grid(row=6, column=0, pady=(Scale.px(10), 0),
+                                                                 padx=Scale.px(4))
+        ttk.Button(top, text='OK', command=self.ok).grid(row=6, column=1, pady=(Scale.px(10), 0), padx=Scale.px(4))
+        top.bind('<Return>', lambda e: self.ok())
+        top.bind('<Escape>', lambda e: top.destroy())
+        top.geometry(f'+{app.root.winfo_rootx() + 80}+{app.root.winfo_rooty() + 60}')
+
+    def ok(self):
+        self.top.destroy()
+        self.app.set_scale(self.var.get() or None)

@@ -15,8 +15,8 @@ python run.py [file.NS5] [--scale 1|2|3]
 
 Python 3.8+ with Tk 8.6 or newer.
 
-The window is laid out in the original's dialog units. Choose the zoom under **Options › Scale**
-(*Automatic*, *1x*, *2x* or *3x*). The choice is saved, and `--scale N` overrides it for one run.
+The window is laid out in the original's dialog units. Choose the zoom under **Settings › Scale**
+(Windows/Linux) or **NS5R SoundEditor › Settings…** (macOS, Cmd+,): *Automatic*, *1x*, *2x* or *3x*. The choice is saved, and `--scale N` overrides it for one run.
 
 ## What it does
 
