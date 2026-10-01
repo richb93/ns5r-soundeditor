@@ -164,10 +164,12 @@ COMBI_SWITCHES = {2527 + b: P(27, 0, 1, mask=1 << b, shift=b) for b in range(6)}
 COMBI_SWITCH_NAMES = ['Note ON/OFF', 'Control Change', 'Pitch Bend', 'After Touch', 'Damper', 'Portament']
 
 # ------------------------------------------------------------------ drum instrument (14 bytes)
+DRUM_SIGNED = (2, 3, 7, 8, 9, 10)
 DRUM = {
-    4000: P(0, 0, 285, word=True), 4002: P(2, 0, 127, center64), 4003: P(3, 0, 127, center64),
-    4004: P(4), 4005: P(5, 1, 127), 4007: P(7, 0, 127, center64), 4008: P(8, 0, 127, center64),
-    4009: P(9, 0, 127, center64), 4010: P(10, 0, 127, center64), 4011: P(11, 0, 127, pan),
+    # relative parameters are signed bytes centred on 0 (the editor's SpinBox range is -64..63)
+    4000: P(0, 0, 285, word=True), 4002: P(2, -64, 63), 4003: P(3, -64, 63),
+    4004: P(4), 4005: P(5, 1, 127), 4007: P(7, -64, 63), 4008: P(8, -64, 63),
+    4009: P(9, -64, 63), 4010: P(10, -64, 63), 4011: P(11, 1, 127, pan),
     4012: P(12), 4013: P(13),
     4506: P(6, 0, 1, mask=1, shift=0), 4507: P(6, 0, 1, mask=2, shift=1),
     4508: P(6, 0, 1, mask=4, shift=2, items=['Single', 'Multi']),

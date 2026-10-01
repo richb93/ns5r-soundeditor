@@ -1054,7 +1054,7 @@ def export_text(lib, kind, items):
             for i in range(M.N_INST):
                 b = i * M.INST_SIZE
                 inst = (buf[b] << 8) | buf[b + 1]
-                rel = lambda v: str(v - 64)  # noqa: E731
+                rel = lambda v: str(M.s8(v))  # noqa: E731
                 out.append('\t'.join([N.note_name(M.FIRST_KEY + i), str(inst), N.drum_name(inst), rel(buf[b + 2]),
                                       rel(buf[b + 3]), str(buf[b + 4]), str(buf[b + 5]) if buf[b + 5] else 'OFF',
                                       'ON' if buf[b + 6] & 1 else 'OFF', 'ON' if buf[b + 6] & 2 else 'OFF',

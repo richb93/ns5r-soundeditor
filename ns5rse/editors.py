@@ -591,7 +591,7 @@ class KitRef:
 
 def drum_row(buf, b, key):
     """One line of the Drum Kit Edit list (the Note ON/OFF arrows are drawn separately)."""
-    rel = lambda v: str(v - 64)  # noqa: E731
+    rel = lambda v: str(M.s8(v))  # noqa: E731
     return (N.note_name(key), str((buf[b] << 8) | buf[b + 1]), rel(buf[b + 2]), rel(buf[b + 3]), str(buf[b + 4]),
             str(buf[b + 5]) if buf[b + 5] else '---', 'M' if buf[b + 6] & 4 else 'S',
             rel(buf[b + 7]), rel(buf[b + 8]), rel(buf[b + 9]), rel(buf[b + 10]), PR.pan(buf[b + 11]),
@@ -840,7 +840,7 @@ class EffectParamDialog(ModalDialog):
                 w = f.w[cid]
                 o = 0x0A + (cid - 5010)
                 w.lo, w.hi = 0, 100
-                w.fmt = lambda v: f'{100 - v}:{v}'
+                w.fmt = lambda v: 'Dry' if v == 0 else 'Fx' if v >= 100 else f'{100 - v}:{v}'
                 w.set(buf[o])
                 w.on_change = lambda v, o=o: self.set_raw(o, v)
         mo = 0x19 if e == 0 else 0x23

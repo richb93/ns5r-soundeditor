@@ -71,8 +71,8 @@ def init_effect():
 
 def init_kit():
     """A new document's user kit: sample 0 on every key, level 127, Note ON/OFF on, Multi
-    assign, relative parameters and pan centred (as the original editor shows it)."""
-    inst = bytes([0, 0, 64, 64, 127, 0, 7, 64, 64, 64, 64, 64, 0, 0])
+    assign, relative parameters 0 and pan centred (as the original editor shows it)."""
+    inst = bytes([0, 0, 0, 0, 127, 0, 7, 0, 0, 0, 0, 64, 0, 0])
     return bytearray(inst * N_INST)
 
 

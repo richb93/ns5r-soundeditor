@@ -102,9 +102,7 @@ def drum_params(buf, off, base=0):
         v = buf[b + 6]
         return [(key, 5, v & 1), (key, 6, (v >> 1) & 1), (key, 7, (v >> 2) & 1)]
     lsb = {2: 1, 3: 2, 4: 3, 5: 4, 7: 8, 8: 9, 9: 10, 10: 11, 11: 12, 12: 13, 13: 14}[rel]
-    v = buf[off]
-    if rel in (2, 3, 7, 8, 9, 10):
-        v -= 64
+    v = M.s8(buf[off]) if rel in (2, 3, 7, 8, 9, 10) else buf[off]
     return [(key, lsb, v)]
 
 
@@ -195,7 +193,10 @@ def multi_addresses(buf, off):
             return [(0x30 + k, key, 0x0A, [v & 1]), (0x30 + k, key, 0x09, [(v >> 1) & 1]),
                     (0x30 + k, key, 0x08, [(v >> 2) & 1])]
         if rel in _DRUM_ADDR:
-            return [(0x30 + k, key, _DRUM_ADDR[rel], [buf[off]])]
+            v = buf[off]
+            if rel in (2, 3, 7, 8, 9, 10):     # function-12 drum values are centred on 64
+                v = max(0, min(127, M.s8(v) + 64))
+            return [(0x30 + k, key, _DRUM_ADDR[rel], [v])]
     return None
 
 
