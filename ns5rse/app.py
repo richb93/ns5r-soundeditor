@@ -11,6 +11,7 @@ from . import device as D
 from . import dialogs as DL
 from . import editors as E
 from . import fileio
+from . import x5
 from . import model as M
 from . import names as N
 from . import pages as PG
@@ -26,7 +27,8 @@ KIND_TITLE = {'program': 'Program', 'combi': 'Combination', 'effect': 'Effect', 
               'drum': 'Drum Kit', 'global': 'Global'}
 ALL_TITLE = {'all_multi': 'All Multi', 'all_program': 'All Program', 'all_combi': 'All Combination',
              'all_drum': 'All Drum Kit', 'all_effect': 'All Effect', 'global': 'Global'}
-FILETYPES = [('NS5 Files', '*.NS5 *.ns5'), ('SysEx / SMF', '*.syx *.SYX *.mid *.MID'), ('All Files', '*')]
+FILETYPES = [('NS5 Files', '*.NS5 *.ns5'), ('X5/05 Files', '*.X5 *.x5 *.05R *.05r'),
+             ('SysEx / SMF', '*.syx *.SYX *.mid *.MID'), ('All Files', '*')]
 
 
 def enable_windows_dpi_awareness():
@@ -811,19 +813,15 @@ class App:
 
     def load(self, path):
         try:
-            with open(path, 'rb') as f:
-                head = f.read(4)
-            if head[:1] == b'\x72':
-                lib = M.Library.load(path)
+            lib, native = self.read_document(path)
+            if native:
                 self.replace_library(lib, path)
-            else:
-                lib = M.Library()
-                n = self.apply_messages(lib, fileio.read_messages(path))
-                if not n:
-                    raise ValueError('no NS5R dump data found')
+            else:                       # converted / imported data becomes a new, unsaved document
+                self.untitled += 1
                 self.replace_library(lib, None)
                 self.dirty = True
                 self.update_title()
+                self.status(f'Converted {os.path.basename(path)}')
         except (OSError, ValueError) as e:
             messagebox.showerror(APP_NAME, f'Read Error : {os.path.basename(path)}\n{e}', parent=self.root)
             return
@@ -833,6 +831,22 @@ class App:
             keys = [('open_multi', 'all_multi'), ('open_prog', 'all_program'), ('open_combi', 'all_combi'),
                     ('open_drum', 'all_drum'), ('open_fx', 'all_effect'), ('open_global', 'global')]
             self.send_all([w for k, w in keys if prefs.get(k)])
+
+    def read_document(self, path):
+        """Read an NS5 document, an X5/05R/W SoundEditor file, or SysEx/SMF dumps.
+        Returns (Library, native) where native means a .NS5 document."""
+        with open(path, 'rb') as f:
+            data = f.read()
+        if data[:2] == b'\x72\x05':
+            return M.Library.from_bytes(data), True
+        lib = M.Library()
+        ext = os.path.splitext(path)[1].lower()
+        if ext in ('.x5', '.05r') or (ext not in ('.syx', '.mid', '.midi') and x5.is_x5_file(data)):
+            effects = 'combi' if self.prefs().get('x5_effect') == 1 else 'program'
+            return x5.convert(data, lib, effects), False
+        if not self.apply_messages(lib, fileio.read_messages(path)):
+            raise ValueError('no NS5R dump data found')
+        return lib, False
 
     def apply_messages(self, lib, messages):
         """Store NS5R dumps from a list of SysEx messages into `lib`; returns how many were used."""
@@ -888,14 +902,7 @@ class App:
         if not path:
             return
         try:
-            with open(path, 'rb') as f:
-                head = f.read(1)
-            if head == b'\x72':
-                src = M.Library.load(path)
-            else:
-                src = M.Library()
-                if not self.apply_messages(src, fileio.read_messages(path)):
-                    raise ValueError('no NS5R dump data found')
+            src, _ = self.read_document(path)
         except (OSError, ValueError) as e:
             messagebox.showerror(APP_NAME, f'Read Error : {e}', parent=self.root)
             return

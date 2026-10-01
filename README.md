@@ -63,6 +63,11 @@ Exclusive Data, and the MIDI Reset submenu.
   table for programs, combinations, drum kits, global, effects, multis and the remark list. Files
   written by the original editor open directly, and files saved here open in the original.
 * `.syx` and `.mid` files containing NS5R dumps can be opened or imported.
+* **X5 / 05R/W SoundEditor files** (`.X5`, `.05R`) are converted as the original did: programs and
+  combinations 1-100, the two user drum kits, and the program (or combination, see Preferences ›
+  X5 File Convert) effects into user effects 1-100. `ns5rse/x5.py` is a translation of the
+  original converter; its output was checked byte-for-byte against the original code run in a CPU
+  emulator, on the four 05R files shipped with the X5 editor.
 * **File › Export...** uses the original's dialog: Mode (Program / Combination / Multi / Effect /
   Drum Kit / Global), Data No. or Select All, and Format: *Native* (`.NS5` with just that data),
   *Text* (tab-separated parameter listing) or *SMF (Format 0)* (dumps with write requests).
@@ -101,5 +106,4 @@ This port was tested against a simulated NS5R on virtual MIDI ports, not a real 
 * **Effect parameter displays.** A few use the units from KORG's table where the editor's own
   formatting was not traced. Examples: Para EQ frequencies show the raw index, and Dry:Fx is
   shown as `dry:fx`.
-* **X5/05R file import** from the original (via its X5 multisample map) is not implemented.
 * **Fonts.** A system font stands in for MS Sans Serif.

@@ -621,7 +621,7 @@ class DrumKitWindow:
         for it, w in f.all:
             if it['text'] == 'Smpl':
                 w.config(text='Sample')
-                f.place(w, [20, 3, 22, 8])
+                f.place(w, [27, 3, 18, 8])
         f.command(1, self.close)
         f.command(103, self.edit_levels)
         self.lv = f.w[101]
