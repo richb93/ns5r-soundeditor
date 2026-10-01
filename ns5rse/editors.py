@@ -789,7 +789,7 @@ def fx_spec(t, i, mins, maxs):
         return ('byte', 0, maxs[i][t], lambda v: str(100 + 10 * v))
     if hi > 127 and lo >= 0:
         return ('byte', lo, hi, str)
-    return ('sbyte', lo, M.s8(hi) if hi > 127 else hi, str)
+    return ('sbyte', lo, M.s8(hi) if hi > 127 else hi, PR.signed if lo < 0 else str)
 
 
 class EffectParamDialog(ModalDialog):
@@ -848,7 +848,7 @@ class EffectParamDialog(ModalDialog):
             combo_set(f.w[5025], PR.FX_MOD_SOURCES, min(buf[mo], 6))
             f.w[5025].bind('<<ComboboxSelected>>', lambda ev: self.set_raw(mo, f.w[5025].current()))
             sp = f.w[5026]
-            sp.lo, sp.hi = -15, 15
+            sp.lo, sp.hi, sp.fmt = -15, 15, PR.signed
             sp.set(M.s8(buf[mo + 1]))
             sp.on_change = lambda v: self.set_raw(mo + 1, v & 0xFF)
         if 102 in f.w:     # effect on/off check box, labelled with the effect name
@@ -904,8 +904,6 @@ def set_effect_type(app, kind, index, e, t):
     o = fx_param_offset(e, 0)
     buf[o:o + 8] = bytes(dflt[:8])
     buf[0x0A + 2 * e], buf[0x0B + 2 * e] = dflt[8], dflt[9]
-    if t:
-        buf[0x10] |= 3 << 2 * e
     app.edited(kind, index, [8 + e, 0x0A + 2 * e, 0x0B + 2 * e, 0x10] + list(range(o, o + 8)))
 
 
