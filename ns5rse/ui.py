@@ -84,8 +84,9 @@ def setup_style(root):
     st.map('TButton', foreground=[('disabled', GREYTEXT)])
     st.configure('TCheckbutton', padding=0, indicatormargin=(0, 0, Scale.px(3), 0))
     st.configure('TRadiobutton', padding=0, indicatormargin=(0, 0, Scale.px(3), 0))
-    st.map('TCheckbutton', foreground=[('disabled', GREYTEXT)], indicatorcolor=[('disabled', FACE)])
-    st.map('TRadiobutton', foreground=[('disabled', GREYTEXT)], indicatorcolor=[('disabled', FACE)])
+    for cls in ('TCheckbutton', 'TRadiobutton'):
+        st.map(cls, foreground=[('disabled', GREYTEXT)], indicatorcolor=[('disabled', FACE)],
+               background=[('disabled', FACE), ('active', FACE)])
     st.configure('TLabelframe', borderwidth=Scale.px(2), relief='groove', labelmargins=(Scale.px(6), 0, 0, 0))
     st.configure('TLabelframe.Label', font=f)
     st.configure('TNotebook', tabmargins=(Scale.px(2), Scale.px(2), 0, 0), borderwidth=Scale.px(2))

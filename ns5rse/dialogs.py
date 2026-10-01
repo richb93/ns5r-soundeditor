@@ -362,22 +362,40 @@ EG_RANGES = {'pitch': (18, 24), 'vdf': (41, 49), 'vda': (62, 69)}   # relative O
 
 class EgCopyDialog(ModalDialog):
     """EG Copy and Swap between OSC1 and OSC2 of one program."""
+    GROUPS = (('pitch', 104, 101, 102, 103), ('vdf', 108, 105, 106, 107), ('vda', 112, 109, 110, 111))
 
     def __init__(self, app):
         super().__init__(app.root, 'EG_COPY_DLG')
         f = self.form
-        for chk, combo in ((104, 103), (108, 107), (112, 111)):
-            f.check(chk, 1)
+        for _, chk, swap, copy, combo in self.GROUPS:
+            f.check(chk, 0)
+            f.vars[swap].set(copy)          # 'EG Copy' preselected
             combo_set(f.w[combo], ['OSC1 -> OSC2', 'OSC1 <- OSC2'], 0)
-        for r in (101, 105, 109):
-            f.vars[r].set(r)
+            f.command(chk, self.update)
+            f.command(swap, self.update)
+            f.command(copy, self.update)
+        self.update()
+
+    def update(self):
+        f = self.form
+        any_on = False
+        for _, chk, swap, copy, combo in self.GROUPS:
+            on = bool(f.check(chk))
+            any_on |= on
+            f.enable(swap, on)
+            f.enable(copy, on)
+            f.enable(combo, on and f.vars[swap].get() == copy)
+        f.enable(1, any_on)
 
     def ok(self):
         f = self.form
         res = []
-        for kind, chk, swap, combo in (('pitch', 104, 101, 103), ('vdf', 108, 105, 107), ('vda', 112, 109, 111)):
+        for kind, chk, swap, copy, combo in self.GROUPS:
             if f.check(chk):
-                op = 'swap' if f.vars[swap].get() == swap else ('1to2' if f.w[combo].current() == 0 else '2to1')
+                if f.vars[swap].get() == swap:
+                    op = 'swap'
+                else:
+                    op = '1to2' if f.w[combo].current() == 0 else '2to1'
                 res.append((kind, op))
         self.result = res
         self.close()
