@@ -112,6 +112,7 @@ RECOLOR = {
     300: [('', _osc), ('_dis', {CYAN: DARK, MAGENTA: WHITE, BLUE: DARK})],
     301: [('', {YELLOW: BLACK, GREEN: WHITE, MAGENTA: WHITE})],
     500: [('', {GREEN: WHITE})],
+    502: [('', {YELLOW: BLACK})],
     **{n: [('', _fx)] for n in (258, 259, 260, 261)},
     **{n: [('', {YELLOW: BLACK})] for n in range(100, 108)},
 }

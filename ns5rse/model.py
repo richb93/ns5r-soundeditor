@@ -3,7 +3,6 @@
 Layouts follow the NS5R Exclusive Data Format tables (Program 158, Combination 126,
 Drum Kit 1358, Effect 38, Multi 8566, Global 10 bytes).  Multi-byte values are MSB first.
 """
-from . import resources as R
 
 PROG_SIZE, COMBI_SIZE, KIT_SIZE, FX_SIZE, MULTI_SIZE, GLOBAL_SIZE = 158, 126, 1358, 38, 8566, 10
 REMARK_SIZE = 740                 # 5 x 128 remark numbers + 10 names x 10 chars
@@ -71,7 +70,10 @@ def init_effect():
 
 
 def init_kit():
-    return bytearray(R.data()['default_kit'])
+    """A new document's user kit: sample 0 on every key, level 127, Note ON/OFF on, Multi
+    assign, relative parameters and pan centred (as the original editor shows it)."""
+    inst = bytes([0, 0, 64, 64, 127, 0, 7, 64, 64, 64, 64, 64, 0, 0])
+    return bytearray(inst * N_INST)
 
 
 def init_part(n):

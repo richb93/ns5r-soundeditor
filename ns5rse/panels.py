@@ -94,7 +94,7 @@ class OscSummary(tk.Canvas):
         d = base - M.OSC1
         f = ui.font()
         ms = (p[base] << 8) | p[base + 1]
-        self.create_text(8 * s, 23 * s, anchor='nw', text=N.ms_name(ms), font=f, fill=ui.TEXT)
+        self.create_text(8 * s, 23 * s, anchor='nw', text=N.osc_source_name(ms, p[10] == 2), font=f, fill=ui.TEXT)
         for off, (x, y, al, fmt) in self.VALUES.items():
             v = p[off + d]
             if off == 16:

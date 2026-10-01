@@ -133,7 +133,8 @@ class OscDialog(EditDialog):
             self.binders.append(b)
         osc_tab = self.tabs[0]
         set_ms = osc_tab.w[102]
-        self.binders[0].extra.append(lambda: set_entry(set_ms, N.ms_name(self.binders[0].value(1014))))
+        self.binders[0].extra.append(lambda: set_entry(set_ms, N.osc_source_name(
+            self.binders[0].value(1014), self.block()[10] == 2)))
         osc_tab.command(103, self.ms_list)
         osc_tab.command(104, lambda: app.edit_drum_kit_for_program(index))
         oct_combo = osc_tab.w[1016]
@@ -187,10 +188,15 @@ class OscDialog(EditDialog):
                     w.draw()
         for box, off, j in getattr(self, 'pms', []):
             box.set(pm_state(self.block()[off + self.osc * M.OSC_SIZE], j))
-        self.tabs[0].show(104, mode == 2)
+        osc = self.tabs[0]
+        osc.show(104, mode == 2)
+        osc.w[1014].set_range(0, N.N_KITS - 1 if mode == 2 else 527)
+        osc.enable(104, mode == 2 and self.binders[0].value(1014) >= N.USER_KIT1)
 
     def changed(self, offsets):
         super().changed(offsets)
+        if self.block()[10] == 2:
+            self.tabs[0].enable(104, self.binders[0].value(1014) >= N.USER_KIT1)
         self.after_change()
 
     def after_change(self):
@@ -226,9 +232,14 @@ class OscDialog(EditDialog):
         self.binders[9].refresh()
 
     def ms_list(self):
-        names = [f'{n:03d}:{N.ms_name(n)}' for n in range(528)]
+        if self.block()[10] == 2:
+            names = [f'{n:03d}:{N.kit_name(n)}' for n in range(N.N_KITS)]
+            title = 'Drum Kit Name List'
+        else:
+            names = [f'{n:03d}:{N.ms_name(n)}' for n in range(528)]
+            title = 'Multi Sample Name List'
         cur = self.binders[0].value(1014)
-        r = NameListDialog(self.top, 'Multi Sample Name List', names, cur).show()
+        r = NameListDialog(self.top, title, names, cur).show()
         if r is not None:
             self.binders[0].write(1014, r)
 
@@ -540,7 +551,7 @@ class GlobalEditDialog(EditDialog):
         b.bind_all(PR.GLOBAL)
         b.bind(6019, P(9, 0, 1, mask=0xFF))
         f.command(6019, self.fx_follow)
-        b.extra.append(self.show)
+        b.extra.append(self.show_values)
         b.refresh()
 
     def fx_follow(self):
@@ -548,7 +559,7 @@ class GlobalEditDialog(EditDialog):
         self.changed([9])
         self.b.refresh()
 
-    def show(self):
+    def show_values(self):
         v = self.block()[9]
         self.form.check(6019, 1 if v else 0)
         self.form.enable(6009, v != 0)
@@ -574,18 +585,19 @@ class KitRef:
 
 
 def drum_row(buf, b, key):
-    s8 = lambda v: str(v - 64)  # noqa: E731
-    inst = (buf[b] << 8) | buf[b + 1]
-    return (N.note_name(key), f'{inst:03d}', N.drum_name(inst), s8(buf[b + 2]), s8(buf[b + 3]), str(buf[b + 4]),
-            str(buf[b + 5]) if buf[b + 5] else 'Off', 'Multi' if buf[b + 6] & 4 else 'Single',
-            s8(buf[b + 7]), s8(buf[b + 8]), s8(buf[b + 9]), s8(buf[b + 10]), PR.pan(buf[b + 11]),
+    """One line of the Drum Kit Edit list (the Note ON/OFF arrows are drawn separately)."""
+    rel = lambda v: str(v - 64)  # noqa: E731
+    return (N.note_name(key), str((buf[b] << 8) | buf[b + 1]), rel(buf[b + 2]), rel(buf[b + 3]), str(buf[b + 4]),
+            str(buf[b + 5]) if buf[b + 5] else '---', 'M' if buf[b + 6] & 4 else 'S',
+            rel(buf[b + 7]), rel(buf[b + 8]), rel(buf[b + 9]), rel(buf[b + 10]), PR.pan(buf[b + 11]),
             str(buf[b + 12]), str(buf[b + 13]))
 
 
 class DrumKitWindow:
     """'Drum Kit Edit' list of the 97 instruments (C0..C8) of one kit."""
-    COLS = [(1, 'l'), (19, 'l'), (34, 'l'), (59, 'r'), (82, 'r'), (105, 'r'), (128, 'r'), (130, 'l'),
-            (174, 'r'), (197, 'r'), (220, 'r'), (243, 'r'), (264, 'r'), (287, 'r'), (310, 'r')]
+    COLS = [(2, 'l'), (35, 'r'), (57, 'r'), (80, 'r'), (103, 'r'), (125, 'r'), (143, 'l'),
+            (171, 'r'), (194, 'r'), (216, 'r'), (239, 'r'), (250, 'l'), (285, 'r'), (307, 'r')]
+    ARROWS_X = 128          # Note ON (down) / Note OFF (up) icons, DLU from the list's left edge
 
     def __init__(self, app, ref):
         self.app, self.ref = app, ref
@@ -601,15 +613,34 @@ class DrumKitWindow:
             102: lambda form, it: ui.Keyboard(frame, M.FIRST_KEY, M.FIRST_KEY + M.N_INST - 1,
                                               on_press=self.key_down, on_release=self.key_up,
                                               highlight=self.key_hl)})
-        # headers: Note Smpl ... stay as in the template; the list shows instrument numbers and names
+        for it, w in f.all:
+            if it['text'] == 'Smpl':
+                w.config(text='Sample')
+                f.place(w, [20, 3, 22, 8])
         f.command(1, self.close)
         f.command(103, self.edit_levels)
         self.lv = f.w[101]
         self.lv.on_select = lambda i: f.w[102].draw()
+        self.lv.draw_extra = self.draw_arrows
         self.top.protocol('WM_DELETE_WINDOW', self.close)
         self.fill()
         self.lv.select(0)
         app.windows.append(self)
+
+    def draw_arrows(self, c, i, x, y, h, sel):
+        v = self.ref.block()[self.ref.inst(i) + 6]
+        img = ui.image('sys_502')
+        w = img.width() // 2
+        if not hasattr(self, '_arrows'):
+            self._arrows = []
+            for k in range(2):
+                part = tk.PhotoImage()
+                part.tk.call(part, 'copy', img, '-from', k * w, 0, (k + 1) * w, img.height())
+                self._arrows.append(part)
+        px = x + Scale.x(self.ARROWS_X)
+        for k in range(2):
+            if v & (1 << k):
+                c.create_image(px + k * w, y + h // 2, anchor='w', image=self._arrows[k])
 
     def fill(self):
         buf = self.ref.block()
@@ -662,25 +693,33 @@ class DrumEditDialog(ModalDialog):
         self.app, self.ref, self.i = app, ref, inst
         self.saved = bytes(ref.block())
         super().__init__(app.root, 'DRUMKIT_EDIT_DLG', title='Drum Kit Parameters',
-                         custom={104: lambda form, it: ui.ListView(form.parent, on_select=self.pick)})
+                         custom={104: lambda form, it: ui.ListView(form.parent, columns=[(1, 'l'), (19, 'l')],
+                                                                   on_select=self.pick)})
         f = self.form
         self.b = b = Binder(f, ref.block, ref.changed, base=lambda cid: ref.inst(self.i))
         b.bind_all(PR.DRUM)
         f.command(4505, self.excl_off)
         f.command(103, self.name_list)
-        b.extra.append(self.show)
-        f.w[104].set_items([f'{N.note_name(M.FIRST_KEY + i)}' for i in range(M.N_INST)])
+        b.extra.append(self.show_values)
+        self.fill_notes()
         f.w[104].select(inst)
         self.pick(inst)
+
+    def fill_notes(self):
+        buf = self.ref.block()
+        self.form.w[104].set_items([(N.note_name(M.FIRST_KEY + i),
+                                     N.drum_name((buf[self.ref.inst(i)] << 8) | buf[self.ref.inst(i) + 1]))
+                                    for i in range(M.N_INST)])
 
     def pick(self, i):
         self.i = i
         self.top.title(f'Drum Kit Parameters [Key = {N.note_name(M.FIRST_KEY + i)}]')
         self.b.refresh()
 
-    def show(self):
+    def show_values(self):
         f, buf, b = self.form, self.ref.block(), self.ref.inst(self.i)
         set_entry(f.w[101], N.drum_name((buf[b] << 8) | buf[b + 1]))
+        self.fill_notes()
         ex = buf[b + 5]
         f.check(4505, 1 if ex == 0 else 0)
         f.enable(4005, ex != 0)

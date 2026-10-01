@@ -373,8 +373,11 @@ class App:
 
     def edit_drum_kit_for_program(self, i):
         p = self.lib.programs[i]
-        k = ((p[M.OSC1] << 8) | p[M.OSC1 + 1]) & 1
-        self.edit_user_kit(k)
+        kit = (p[M.OSC1] << 8) | p[M.OSC1 + 1]
+        if kit >= N.USER_KIT1:
+            self.edit_user_kit(kit - N.USER_KIT1)
+        else:
+            messagebox.showinfo(APP_NAME, 'Only User Kit 1 and 2 (No. 37, 38) can be edited.', parent=self.root)
 
     def show_keyboard(self):
         if self.keyboard:

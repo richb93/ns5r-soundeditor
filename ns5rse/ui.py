@@ -309,6 +309,7 @@ class ListView(tk.Frame):
         self.col_width = col_width
         self.extended = extended
         self.on_select, self.on_double = on_select, on_double
+        self.draw_extra = None     # fn(canvas, index, x, y, row_height, selected) for icons
         self.items = []
         self.selected = set()
         self.cursor = 0
@@ -421,6 +422,8 @@ class ListView(tk.Frame):
                 px = x + Scale.x(cx)
                 c.create_text(px, y + self.row_h // 2, text=txt, anchor='e' if al == 'r' else 'w', font=f,
                               fill=SEL_FG if sel else TEXT)
+            if self.draw_extra:
+                self.draw_extra(c, i, x, y, self.row_h, sel)
         n, v = self.unit_count(), self.view_units()
         if n <= v:
             self.sb.set(0, 1)

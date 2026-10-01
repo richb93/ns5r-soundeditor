@@ -131,3 +131,17 @@ def ms_name(n):
 def drum_name(n):
     names = R.data()['drum_names']
     return names[n] if 0 <= n < len(names) else ''
+
+
+N_KITS = 39            # drum kits selectable by a Drum-mode program (OSC "No." 0-38)
+USER_KIT1 = 37         # 37, 38 = User Kit 1, 2
+
+
+def kit_name(n):
+    names = R.data()['kit_names']
+    return names[n] if 0 <= n < N_KITS else ''
+
+
+def osc_source_name(n, drum):
+    """OSC1 'No.' names a multisample, or a drum kit when the program is in Drum mode."""
+    return kit_name(n) if drum else ms_name(n)
