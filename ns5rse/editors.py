@@ -29,6 +29,11 @@ class EditDialog(ModalDialog):
     def changed(self, offsets):
         self.app.edited(self.kind, self.index, offsets)
 
+    def ok(self):
+        if bytes(self.block()) != self.saved:
+            self.app.edit_committed(self.kind, self.index)
+        super().ok()
+
     def cancel(self):
         buf = self.block()
         if bytes(buf) != self.saved:
@@ -851,7 +856,6 @@ class EffectParamDialog(ModalDialog):
             f.check(102, 1 if buf[0x10] & (3 << 2 * e) else 0)
             f.command(102, self.set_onoff)
         f.command(101, self.select_type)
-        self.top.title(f'Effect {e + 1} : {N.fx_type_name(t)}')
 
     def block(self):
         return self.app.lib.block(self.kind, self.index)
@@ -936,10 +940,6 @@ class PlacementDialog(ModalDialog):
     def draw(self, c, n):
         c.delete('all')
         c.create_image(0, 0, anchor='nw', image=ui.image(f'sys_{100 + 2 * n + (1 if n == self.sel else 0)}'))
-        c.create_text(c.winfo_width() // 2, c.winfo_height() - Scale.px(2), anchor='s', font=ui.font('small'), fill=ui.TEXT,
-                      text=PR.PLACEMENTS[n])
-        if n == self.sel:
-            c.create_rectangle(1, 1, c.winfo_width() - 2, c.winfo_height() - 2, outline=ui.SEL_BG, width=2)
 
     def pick(self, n):
         self.sel = n
@@ -973,7 +973,9 @@ class EffectPanDialog(ModalDialog):
         on = f.check(chk)
         v = 102 - int(float(f.w[sc].get()) + 0.5) if on else 0
         f.enable(sc, bool(on))
-        f.set_text(txt, PR.pan101(v))
+        for lab in ((102, 103), (105, 106))[n]:
+            f.enable(lab, bool(on))
+        f.set_text(txt, PR.pan101(v) if on else '')
         if write:
             buf = self.app.lib.block(self.kind, self.index)
             if buf[o] != v:

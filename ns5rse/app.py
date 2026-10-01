@@ -59,6 +59,7 @@ class App:
         self.windows = []          # non-modal editors to refresh (drum kit lists)
         self.clipboard = None      # (kind, [blocks])
         self.compare_base = {}
+        self.compare_target = None
         self.expect = []           # pending dump requests
         self.status_dialog = None
         self.exclusive_log = None
@@ -147,7 +148,8 @@ class App:
         e.add_separator()
         add(e, 'Compare...', self.compare)
         add(e, 'Exchange...', self.exchange)
-        add(e, 'EG Copy & Swap...', self.eg_copy)
+        add(e, 'EG Copy & Swap...', self.eg_copy_or_swap)
+        self.eg_index = e.index('end')
         add(e, 'OSC Parameter Copy...', self.osc_copy)
         add(e, 'Change OSC Level...', self.change_levels)
         self.edit_menu = e
@@ -286,9 +288,19 @@ class App:
         bank = kind in ('program', 'combi', 'effect')
         for label in ('Cut', 'Copy', 'Paste', 'Clear', 'Exchange...'):
             e.entryconfig(label, state='normal' if bank else 'disabled')
-        for label in ('EG Copy & Swap...', 'OSC Parameter Copy...', 'Change OSC Level...'):
+        for label in ('OSC Parameter Copy...', 'Change OSC Level...'):
             e.entryconfig(label, state='normal' if kind == 'program' else 'disabled')
-        e.entryconfig('Compare...', state='normal' if kind != 'global' else 'disabled')
+        # as in the original: 'EG Copy & Swap' only for a Double-mode program, and on the
+        # User Effect page the same item becomes 'Swap Fx1 & Fx2'
+        if kind == 'effect':
+            e.entryconfig(self.eg_index, label='Swap Fx1 & Fx2', state='normal')
+        else:
+            double = kind == 'program' and self.lib.programs[self.pages['program'].current()][10] == 1
+            e.entryconfig(self.eg_index, label='EG Copy & Swap...', state='normal' if double else 'disabled')
+        # Compare becomes available after an item has been changed in an edit dialog
+        page = self.current_page()
+        cur = (kind, page.current()) if kind != 'global' else None
+        e.entryconfig('Compare...', state='normal' if cur and cur == self.compare_target else 'disabled')
 
     # ------------------------------------------------------------ data changes
     def set_dirty(self):
@@ -301,6 +313,8 @@ class App:
         offsets = list(offsets)
         self.set_dirty()
         self.refresh_kind(kind, names=any(o < 10 for o in offsets) or kind == 'multi')
+        if kind == 'program':
+            self.update_edit_menu()
         try:
             self.device.edited(kind, index, offsets)
         except Exception as e:
@@ -334,7 +348,9 @@ class App:
             w.refresh()
 
     def item_selected(self, kind, index):
-        self.compare_base.setdefault((kind, index), bytes(self.lib.block(kind, index)))
+        self.compare_base[(kind, index)] = bytes(self.lib.block(kind, index))
+        self.compare_target = None
+        self.update_edit_menu()
         auto = {'program': 'auto_prog', 'combi': 'auto_combi', 'effect': 'auto_fx', 'multi': 'auto_multi'}
         if self.midi.out and self.prefs().get(auto.get(kind, ''), False):
             self.device.select(kind, index)
@@ -466,6 +482,28 @@ class App:
             blocks[a], blocks[b] = blocks[b], blocks[a]
             self.set_dirty()
             self.refresh_kind(kind, names=True)
+
+    def edit_committed(self, kind, index):
+        """An edit dialog was closed with OK after changing (kind, index)."""
+        self.compare_target = (kind, index)
+        self.update_edit_menu()
+
+    def eg_copy_or_swap(self):
+        if self.current_page().kind == 'effect':
+            self.swap_fx()
+        else:
+            self.eg_copy()
+
+    def swap_fx(self):
+        i = self.pages['effect'].current()
+        fx = self.lib.effects[i]
+        old = bytes(fx)
+        fx[8], fx[9] = old[9], old[8]
+        fx[0x0A:0x0C], fx[0x0C:0x0E] = old[0x0C:0x0E], old[0x0A:0x0C]
+        fx[0x11:0x1B], fx[0x1B:0x25] = old[0x1B:0x25], old[0x11:0x1B]
+        io = old[0x10]
+        fx[0x10] = (io & 0xF0) | ((io & 3) << 2) | ((io >> 2) & 3)
+        self.edited('effect', i, range(8, 0x25))
 
     def eg_copy(self):
         i = self.pages['program'].current()
@@ -882,49 +920,46 @@ class App:
 
     def export_file(self):
         page = self.current_page()
-        kind = page.kind
-        modes = ['All Data (NS5)', 'SMF (Format 0)', 'SysEx (.syx)', 'Text (name list)']
-        r = DL.ChoiceDialog(self.root, 'Export', 'Export Data as:', modes).show()
+        r = DL.ExportDialog(self, page.kind, page.current()).show()
         if r is None:
             return
-        ext = ['.NS5', '.MID', '.syx', '.TXT'][r]
+        kind, items, fmt = r
+        ext = {'Native': '.NS5', 'Text': '.TXT', 'SMF (Format 0)': '.MID'}[fmt]
         path = filedialog.asksaveasfilename(parent=self.root, title='Export Data', defaultextension=ext,
                                             initialdir=self.settings.get('dir'))
         if not path:
             return
-        lib, ch = self.lib, self.settings.get('excl_channel', 0)
         try:
-            if r == 0:
+            if fmt == 'Native':
+                lib = M.Library()
+                for i in items:
+                    lib.block(kind, i)[:] = self.lib.block(kind, i)
+                lib.remarks[:] = self.lib.remarks
                 lib.save(path)
-                return
-            if r == 3:
-                with open(path, 'w') as f:
-                    for title, names in (('Program', lib.program_name), ('Combination', lib.combi_name),
-                                         ('Effect', lib.effect_name)):
-                        f.write(f'[User {title}]\n')
-                        for i in range(128):
-                            f.write(f'{N.numbered(i, names(i))}\n')
-                        f.write('\n')
-                return
-            msgs = []
-            if kind == 'global':
-                msgs.append(X.dump(ch, 'global', lib.glob))
-            elif kind == 'multi':
-                msgs.append(X.dump(ch, 'all_multi', b''.join(lib.multis)))
+            elif fmt == 'Text':
+                with open(path, 'w', encoding='cp1252', errors='replace') as f:
+                    f.write(export_text(self.lib, kind, items))
             else:
-                sel = page.selection()
-                if len(sel) == 128:
-                    msgs.append(X.dump(ch, 'all_' + kind, b''.join(self.blocks(kind))))
-                else:
-                    for i in sel:
-                        msgs.append(X.mode_change(ch, D.KIND_MODE[kind]))
-                        msgs.append(X.dump(ch, kind, lib.block(kind, i)))
-                        msgs.append(X.write_request(ch, kind, i))
-            data = fileio.smf_bytes(msgs) if r == 1 else b''.join(msgs)
-            with open(path, 'wb') as f:
-                f.write(data)
+                with open(path, 'wb') as f:
+                    f.write(fileio.smf_bytes(self.export_messages(kind, items)))
         except OSError as e:
             messagebox.showerror(APP_NAME, f'Error : Write Error\n{e}', parent=self.root)
+
+    def export_messages(self, kind, items):
+        lib, ch = self.lib, self.settings.get('excl_channel', 0)
+        if kind == 'global':
+            return [X.dump(ch, 'global', lib.glob)]
+        count = {'program': 128, 'combi': 128, 'effect': 128, 'drum': M.N_KITS, 'multi': M.N_MULTIS}[kind]
+        if len(items) == count:
+            blocks = {'program': lib.programs, 'combi': lib.combis, 'effect': lib.effects, 'drum': lib.kits,
+                      'multi': lib.multis}[kind]
+            return [X.dump(ch, 'all_' + kind, b''.join(blocks))]
+        msgs = []
+        for i in items:
+            msgs.append(X.mode_change(ch, D.KIND_MODE[kind]))
+            msgs.append(X.dump(ch, kind, lib.block(kind, i)))
+            msgs.append(X.write_request(ch, kind, i))
+        return msgs
 
     # ------------------------------------------------------------ misc
     def preferences(self):
@@ -946,3 +981,110 @@ class App:
 
     def run(self):
         self.root.mainloop()
+
+
+def export_text(lib, kind, items):
+    """Readable parameter listing (File > Export, Format: Text)."""
+    from . import params as PR
+    R = ui.R
+    out = []
+    if kind == 'program':
+        names = R.strings()
+        for i in items:
+            p = lib.programs[i]
+            out.append(f'Program {i + 1:03d}\t{lib.program_name(i)}')
+            out.append(f'{names[410]}\t{PR.OSC_MODES[min(p[10], 2)]}')
+            bank = N.fx_bank_index(p[11])
+            out.append(f'{names[411]}\t{p[11]:02X}:{p[12]:02X} {N.FX_BANKS[bank]}')
+            out.append(f'{names[413]}\t{N.numbered(p[13], N.fx_name(bank, p[13], lib))}')
+            rows = [(414, None)] + [(416 + k, 16 + k) for k in range(70)]
+            for sid, off in rows:
+                label = names.get(sid)
+                if not label:
+                    continue
+                vals = []
+                for base in (M.OSC1, M.OSC2):
+                    if off is None:
+                        n = (p[base] << 8) | p[base + 1]
+                        vals.append(f'{n}:{N.osc_source_name(n, p[10] == 2)}')
+                    elif off == 16:
+                        vals.append(PR.OCTAVES[PR.osc_octave_index(p[base + 2])])
+                    elif off in (48, 54, 72, 75):     # time switches: AT/DT/ST/RT on (+/-) or off
+                        v = p[off + base - M.OSC1]
+                        vals.append(' '.join(f"{n}{'-' if v & (16 << j) else '+'}" if v & (1 << j) else f'{n}:OFF'
+                                             for j, n in enumerate(('AT', 'DT', 'ST', 'RT'))))
+                    else:
+                        sp = PR.PROGRAM.get(1000 + off)
+                        o = base - M.OSC1
+                        vals.append(sp.text(sp.get(p, o)) if sp else str(p[off + o]))
+                out.append(label + '\t' + '\t'.join(vals))
+            out.append('')
+    elif kind == 'combi':
+        names = R.strings()
+        for i in items:
+            c = lib.combis[i]
+            out.append(f'Combination {i + 1:03d}\t{lib.combi_name(i)}')
+            bank = N.fx_bank_index(c[10])
+            out.append(f'{names[411]}\t{N.FX_BANKS[bank]}\t{N.numbered(c[12], N.fx_name(bank, c[12], lib))}')
+            out.append('\t' + '\t'.join(f'Timbre {t + 1}' for t in range(8)))
+            for sid in range(514, 533):
+                if sid not in names:
+                    continue
+                vals = []
+                for t in range(8):
+                    b = M.TIMBRE0 + t * M.TIMBRE_SIZE
+                    if sid == 514:
+                        vals.append(f'{c[b]:03d}:{c[b + 1]:03d}')
+                    elif sid == 516:
+                        bank_i = N.bank_index(c[b], c[b + 1])
+                        vals.append(N.numbered(c[b + 2], N.program_name(bank_i, c[b + 2], lib) if bank_i is not None else ''))
+                    elif sid >= 527:
+                        vals.append('ON' if c[b + 13] & (1 << (sid - 527)) else 'OFF')
+                    else:
+                        off = {517: 3, 518: 4, 519: 5, 520: 6, 521: 8, 522: 7, 523: 10, 524: 9, 525: 11, 526: 12}[sid]
+                        v = c[b + off]
+                        vals.append(PR.pan(v) if sid == 518 else str(M.s8(v) if off in (11, 12) else v))
+                out.append(names[sid] + '\t' + '\t'.join(vals))
+            out.append('')
+    elif kind == 'drum':
+        for k in items:
+            out.append(f'User Kit {k + 1}')
+            out.append(R.strings()[540])
+            buf = lib.kits[k]
+            for i in range(M.N_INST):
+                b = i * M.INST_SIZE
+                inst = (buf[b] << 8) | buf[b + 1]
+                rel = lambda v: str(v - 64)  # noqa: E731
+                out.append('\t'.join([N.note_name(M.FIRST_KEY + i), str(inst), N.drum_name(inst), rel(buf[b + 2]),
+                                      rel(buf[b + 3]), str(buf[b + 4]), str(buf[b + 5]) if buf[b + 5] else 'OFF',
+                                      'ON' if buf[b + 6] & 1 else 'OFF', 'ON' if buf[b + 6] & 2 else 'OFF',
+                                      'Multi' if buf[b + 6] & 4 else 'Single', rel(buf[b + 7]), rel(buf[b + 8]),
+                                      rel(buf[b + 9]), rel(buf[b + 10]), PR.pan(buf[b + 11]), str(buf[b + 12]),
+                                      str(buf[b + 13])]))
+            out.append('')
+    elif kind == 'effect':
+        for i in items:
+            fx = lib.effects[i]
+            out.append(f'Effect {i + 1:03d}\t{lib.effect_name(i)}')
+            out.append(f'Placement\t{PR.PLACEMENTS[(fx[0x10] >> 4) & 3]}')
+            for e in range(2):
+                t = fx[8 + e]
+                base = 0x11 + 10 * e
+                out.append(f'Effect {e + 1}\t{N.fx_type_name(t)}\t' + ' '.join(f'{v:02X}' for v in fx[base:base + 8]))
+            out.append('')
+    elif kind == 'multi':
+        for m in items:
+            out.append(f'Multi {m + 1}')
+            out.append('Part\tBank\tProgram\tCh\tTrans\tVol\tPan\tRev\tCho\tExp')
+            for n in range(32):
+                out.append('\t'.join(_part_row(lib, m, n)))
+            out.append('')
+    else:
+        g = lib.glob
+        out.append('Global\t' + ' '.join(f'{v:02X}' for v in g))
+    return '\n'.join(out) + '\n'
+
+
+def _part_row(lib, m, n):
+    from types import SimpleNamespace
+    return PG.part_row(SimpleNamespace(lib=lib), lib.multis[m], n)

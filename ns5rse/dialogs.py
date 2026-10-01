@@ -200,8 +200,6 @@ class DumpDialog(ModalDialog):
         for cid in DUMP_KINDS:
             f.command(cid, self.sync)
         f.command(108, self.all)
-        f.check(108, 1)
-        self.all()
 
     def all(self):
         on = self.form.check(108)
@@ -609,3 +607,53 @@ class KeyboardWindow:
         self.top.destroy()
         self.app.keyboard = None
 
+
+
+# =================================================================== export
+EXPORT_MODES = [('program', 'Program'), ('combi', 'Combination'), ('multi', 'Multi'), ('effect', 'Effect'),
+                ('drum', 'Drum Kit'), ('global', 'Global')]
+EXPORT_FORMATS = ['Native', 'Text', 'SMF (Format 0)']
+
+
+class ExportDialog(ModalDialog):
+    """File > Export: what to export (Mode, Data No. / Select All) and the file format."""
+
+    def __init__(self, app, kind, current):
+        super().__init__(app.root, 'EXPORT_DLG')
+        self.app = app
+        f = self.form
+        kinds = [k for k, _ in EXPORT_MODES]
+        combo_set(f.w[103], [t for _, t in EXPORT_MODES], kinds.index(kind) if kind in kinds else 0)
+        f.w[103].bind('<<ComboboxSelected>>', lambda e: self.fill(0))
+        combo_set(f.w[106], EXPORT_FORMATS, 0)
+        f.command(105, self.select_all)
+        self.fill(current)
+
+    def kind(self):
+        return EXPORT_MODES[self.form.w[103].current()][0]
+
+    def fill(self, current):
+        f, lib, kind = self.form, self.app.lib, self.kind()
+        items = {'program': [N.numbered(i, lib.program_name(i)) for i in range(128)],
+                 'combi': [N.numbered(i, lib.combi_name(i)) for i in range(128)],
+                 'effect': [N.numbered(i, lib.effect_name(i)) for i in range(128)],
+                 'multi': [f'Multi-{i + 1}' for i in range(4)],
+                 'drum': ['Drum Kit 1', 'Drum Kit 2'], 'global': ['Global']}[kind]
+        f.w[104].selection_clear()
+        combo_set(f.w[104], items, min(current, len(items) - 1))
+        f.check(105, 1 if kind == 'global' else 0)
+        f.enable(105, kind != 'global')
+        self.select_all()
+
+    def select_all(self):
+        f = self.form
+        f.enable(104, not f.check(105))
+        f.enable(102, not f.check(105))
+
+    def ok(self):
+        f = self.form
+        kind = self.kind()
+        n = len(f.w[104].cget('values'))
+        items = list(range(n)) if f.check(105) else [f.w[104].current()]
+        self.result = (kind, items, EXPORT_FORMATS[f.w[106].current()])
+        self.close()

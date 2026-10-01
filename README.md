@@ -37,8 +37,9 @@ The main window has the original's five pages:
 Drum kits (User Kit 1/2 and each Multi's four modify drums) are under **Window › Drum Kit Edit**,
 and from *Edit Drum Kit* in a Drum-mode program.
 
-Also implemented: Cut/Copy/Paste/Clear of list selections, Compare, Exchange, EG Copy & Swap, OSC
-Parameter Copy, Change OSC Level, Remark List, Preferences (startup receive, send on open, auto
+Also implemented: Cut/Copy/Paste/Clear of list selections, Compare (available after an item was
+changed in an edit dialog), Exchange, EG Copy & Swap (Double-mode programs; on the User Effect page it
+becomes Swap Fx1 & Fx2, as in the original), OSC Parameter Copy, Change OSC Level, Remark List, Preferences (startup receive, send on open, auto
 dump), Keyboard window (mouse or keys `A W S E D F T G Y H U J K O L P ;`, `Z`/`X` octave), Show
 Exclusive Data, and the MIDI Reset submenu.
 
@@ -62,7 +63,9 @@ Exclusive Data, and the MIDI Reset submenu.
   table for programs, combinations, drum kits, global, effects, multis and the remark list. Files
   written by the original editor open directly, and files saved here open in the original.
 * `.syx` and `.mid` files containing NS5R dumps can be opened or imported.
-* **File › Export...** writes NS5, SMF (Format 0), raw SysEx or a text name list.
+* **File › Export...** uses the original's dialog: Mode (Program / Combination / Multi / Effect /
+  Drum Kit / Global), Data No. or Select All, and Format: *Native* (`.NS5` with just that data),
+  *Text* (tab-separated parameter listing) or *SMF (Format 0)* (dumps with write requests).
 
 ## Building a standalone app
 
